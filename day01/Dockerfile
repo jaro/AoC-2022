@@ -6,5 +6,5 @@ RUN swift build -c release
 FROM swift:slim
 WORKDIR /root
 COPY --from=builder /root .
-CMD [".build/release/day01"]
+CMD [".build/release/AoC"]
 
