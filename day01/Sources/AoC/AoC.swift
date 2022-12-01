@@ -23,10 +23,10 @@ public struct AoC {
     }
     
     func getSolutionPart1() -> Int {
-        return input.split(separator: "").map{Array($0)}.map{$0.map{Int($0)!}}.map{$0.reduce(0,+)}.max()!
+        return input.split(separator: "").map{$0.map{Int($0)!}}.map{$0.reduce(0,+)}.max()!
     }
     
     func getSolutionPart2() -> Int {
-        return input.split(separator: "").map{Array($0)}.map{$0.map{Int($0)!}}.map{$0.reduce(0,+)}.sorted().reversed()[0...2].reduce(0,+)
+        return input.split(separator: "").map{$0.map{Int($0)!}}.map{$0.reduce(0,+)}.sorted().reversed()[0...2].reduce(0,+)
     }
 }
