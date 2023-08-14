@@ -11,7 +11,7 @@ public struct AoC {
         let input = parse(file: "input.txt")
         
         if part == "part2" {
-            print(AoC(input).getSolutionPart2(line: 2000000))
+            print(AoC(input).getSolutionPart2(maxY: 4000000))
         } else  {
             print(AoC(input).getSolutionPart1(line: 2000000))
         }
@@ -22,7 +22,7 @@ public struct AoC {
         return content.components(separatedBy: .newlines).filter{!$0.isEmpty}.compactMap{$0}
     }
     
-    func parseSensorAndDecons(row: String) -> Sensor {
+    func parseSensorsAndBecons(row: String) -> Sensor {
         let pattern = #"Sensor at x=(-?\d+), y=(-?\d+): closest beacon is at x=(-?\d+), y=(-?\d+)"#
         
         let result = matchString(regex: pattern, string: row)
@@ -35,74 +35,80 @@ public struct AoC {
     }
     
     func parseData() -> [Sensor] {
-        return [Sensor](input.map{parseSensorAndDecons(row: $0)})
+        return [Sensor](input.map{parseSensorsAndBecons(row: $0)})
     }
+    
+    typealias Pos = (x:Int, y:Int)
     
     func getSolutionPart1(line: Int) -> Int {
         let sensors = parseData()
-        sensors.map{$0.calcDist()}
         
-        let maxDist = sensors.map{$0.beaconDist}.max()!
+        let ranges = sensors.map{$0.calcRange(line: line)}
+        let beacons = sensors.compactMap{$0.beacPos()}
         
-        let width = sensors.flatMap{[$0.x,$0.beacon.x]}.max()! + (3*maxDist)
-        let hight = sensors.flatMap{[$0.y,$0.beacon.y]}.max()! + (3*maxDist)
+        let maxDist = sensors.map{abs($0.x-$0.beacon.x) + abs($0.y-$0.beacon.y)}.max()!
         
-        print("Width: \(width) - Hight: \(hight) - Max dist: \(maxDist)")
+        let startX = sensors.flatMap{[$0.x,$0.beacon.x]}.min()! - maxDist
+        let width = (sensors.flatMap{[$0.x,$0.beacon.x]}.max()! + maxDist) - startX
+        let offsetX = abs(startX)
         
-        var grid = [[Int]]()
-        
-        for y in 0..<hight {
-            var row = [Int]()
-            var reachable = false
-            
-            for x in 0..<width {
-                for sensor in sensors {
-                    if hasSignal(sensor: sensor, x: x-maxDist, y: y-maxDist) {
-                        reachable = true
-                        break
-                    }
+        var count = 0
+        for x in 0..<width {
+            if !beacons.contains(where: {$0.x==x && $0.y==line}) {
+                if ranges.contains(where: {$0.contains(x-offsetX)}) {
+                    count += 1
                 }
-                
-                if reachable {
-                    row.append(1)
-                } else {
-                    row.append(0)
-                }
-                reachable = false
             }
-            grid.append(row)
-        }
-        for sensor in sensors {
-            grid[sensor.y+maxDist][sensor.x+maxDist] = 4
-            grid[sensor.beacon.y+maxDist][sensor.beacon.x+maxDist] = 7
         }
         
-        visualize(grid: grid, offset: maxDist)
-        
-        return grid[line+maxDist].filter{$0==1}.count
+        return count
     }
     
-    func getSolutionPart2(line: Int) -> Int {
+    func getSolutionPart2(maxY: Int) -> Int {
+        let sensors = parseData()
+        
+        let beacons = sensors.compactMap{$0.beacPos()}
+        
+        for y in 0...maxY {
+            var ranges = sensors.map{$0.calcRange(line: y, maxY: maxY)}.sorted(by: {$0.lowerBound < $1.lowerBound})
+            ranges = ranges.filter{($0.lowerBound != 0) || ($0.upperBound != 0)}
+//            for range in ranges {
+//                visualize(ranges: [range], upperBound: maxY)
+//            }
+            for i in 0..<(ranges.count-1) {
+                if ranges[i].upperBound > ranges[i+1].upperBound {
+                    ranges[i+1] = ranges[i]
+                } else if (ranges[i].upperBound+1) == (ranges[i+1].lowerBound) {
+                    if !beacons.contains(where: {$0.x==ranges[i].upperBound && $0.y==y}) {
+                        //print("spot: (\(y),\(ranges[i].upperBound))")
+                        return (ranges[i].upperBound*4000000)+y
+                    }
+                }
+            }
+        }
+        
         return 0
     }
     
-    func hasSignal(sensor: Sensor, x: Int, y: Int) -> Bool {
-        return (abs(sensor.x-x) + abs(sensor.y-y)) <= sensor.beaconDist
-    }
-    
-    func visualize(grid: [[Int]], offset: Int) {
-        for y in 0..<grid.count {
-            
-            print(String(format: "%02d-", y-offset), terminator: "")
-            for x in 0..<grid[0].count {
-                print("\(grid[y][x])", terminator: "")
+    func visualize(ranges: [Range<Int>], upperBound: Int) {
+        for x in 0...upperBound {
+            var hit = false
+            for range in ranges {
+                if range.contains(x) {
+                    hit = true
+                    break
+                }
             }
-            print("")
+            if hit {
+                print("#", terminator: "")
+            } else {
+                print(".", terminator: "")
+            }
+            hit = false
         }
-        
         print("")
     }
-    
+
     class Sensor {
         let x: Int
         let y: Int
@@ -115,8 +121,32 @@ public struct AoC {
             self.beacon = beacon
         }
         
-        func calcDist() {
-            beaconDist = abs(x-beacon.x) + abs(y-beacon.y)
+        func calcRange(line: Int) -> Range<Int> {
+            let dist = abs(x-beacon.x) + abs(y-beacon.y)
+            let yLineDist = abs(y-line)
+            let distLeft = dist-yLineDist
+            if distLeft > 0 {
+                return Range(x-distLeft...x+distLeft)
+            } else {
+                return 0 ..< 0
+            }
+        }
+                        
+        func calcRange(line: Int, maxY: Int) -> Range<Int> {
+            let dist = abs(x-beacon.x) + abs(y-beacon.y)
+            let yLineDist = abs(y-line)
+            let distLeft = dist-yLineDist
+            if distLeft > 0 {
+                return Range(max(0,x-distLeft)...min(x+distLeft, maxY))
+            } else {
+                return 0 ..< 0
+            }
+        }
+                        
+                        
+        
+        func beacPos() -> Pos {
+            return (beacon.x, beacon.y)
         }
     }
     
